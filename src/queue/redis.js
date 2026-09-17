@@ -30,7 +30,9 @@ export function getRedisClient() {
 
 export async function closeRedisConnection() {
   if (redis.isOpen) {
-    await redis.quit();
+    // A worker can be blocked indefinitely in BRPOP. Destroying the local
+    // connection releases that command immediately so shutdown can proceed.
+    redis.disconnect();
   }
   connectPromise = undefined;
 }

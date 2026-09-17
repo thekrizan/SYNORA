@@ -47,3 +47,20 @@ npm run queue:smoke -- dequeue
 
 Workers, retries, scheduling, DLQs, failover handling, and the dashboard are
 intentionally deferred to later phases.
+
+## Worker
+
+Start a worker in a second terminal after the infrastructure and migrations are
+running:
+
+```sh
+npm run worker
+```
+
+The worker has a unique process ID and blocks on the ready queue. For each
+queued task it loads the task from PostgreSQL, marks it `processing`, and runs
+an explicitly supported handler. The `demo` handler completes with a
+deterministic result derived from the task payload; the task is then marked
+`completed` with `completed_at` set. Unsupported task types are marked
+`failed` with the reason in `last_error`. The worker continues processing after
+failures and exits cleanly on `SIGINT` or `SIGTERM`.
