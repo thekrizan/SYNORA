@@ -2,65 +2,84 @@
 
 Distributed task scheduler and worker system built for Hackathon Problem 03.
 
-## Phase 1: local infrastructure and persistence
+## Run the complete system
 
-1. Copy the environment template: `cp .env.example .env`
-2. Install Node dependencies: `npm install`
-3. Start PostgreSQL and Redis: `npm run db:up`
-4. Apply the schema: `npm run migrate`
-5. Start the Task API: `npm start`
+```sh
+cp .env.example .env
+npm install
+npm run db:up
+npm run migrate
+```
 
-PostgreSQL runs on `localhost:5432`; Redis runs on `localhost:6379`.
+In separate terminals, start the API/coordinator and two named workers:
 
-## Task API
+```sh
+npm start
+npm run worker:demo-a
+npm run worker:demo-b
+```
+
+The API is at `http://localhost:3000`. PostgreSQL and Redis use the defaults in
+`.env.example`. The API process runs the lightweight scheduler (one-second
+poll) and failure reaper (two-second poll); no extra service is required.
 
 Create a task:
 
 ```sh
 curl -X POST http://localhost:3000/tasks \
   -H 'Content-Type: application/json' \
-  -d '{"type":"send-email","payload":{"to":"ada@example.com"},"max_attempts":3}'
+  -d '{"type":"demo","payload":{"message":"hello"}}'
 ```
 
-Fetch it by the `id` returned from the create response:
+Supported safe task types are `demo`, `slow-demo` (about seven seconds), and
+`fail-demo` (intentionally fails). `scheduled_for` accepts an ISO-8601 time;
+future tasks remain `scheduled` until due.
+
+Useful dashboard endpoints:
 
 ```sh
+curl http://localhost:3000/workers
+curl http://localhost:3000/tasks
 curl http://localhost:3000/tasks/<task-id>
+curl http://localhost:3000/stats
+curl -X POST http://localhost:3000/tasks/<task-id>/reprocess
 ```
 
-`type` and an object `payload` are required. `scheduled_for` accepts an ISO-8601 timestamp and `max_attempts` must be a positive integer.
+`GET /tasks/:id` includes the task's execution history. Reprocessing is allowed
+only from `dlq`; it keeps the attempt count, adds three to `max_attempts`,
+clears current assignment/error, and retains all historical execution rows.
 
-## Redis ready queue
+## Lifecycle notes
 
-After PostgreSQL creates a task, the API enqueues its ID in the Redis list
-`synora:tasks:ready`. The queue is FIFO (`LPUSH` on create and blocking
-`BRPOP` on dequeue). If Redis is unavailable after the database insert, the
-API returns `503` and logs the enqueue error; the task remains in PostgreSQL
-but is not presented as successfully queued.
+- Redis ready queue: `synora:tasks:ready` (FIFO via `LPUSH` + `BRPOP`).
+- Redis DLQ: `synora:tasks:dlq`.
+- Workers register in PostgreSQL, heartbeat every three seconds, and mark
+  themselves offline during graceful shutdown.
+- A claim atomically changes a queued task to `processing`, assigns its worker,
+  sets a 15-second lease, increments attempts, and creates an execution row.
+- Failures retry after roughly 5, 10, then 20 seconds. On the final allowed
+  attempt the task becomes `dlq` and its ID is pushed to the Redis DLQ.
+- The coordinator marks workers offline after 10 seconds without a heartbeat.
+  Processing work with an expired lease or offline owner is recorded as
+  `abandoned` and retried (or moved to DLQ). This deliberately provides
+  at-least-once, not exactly-once, delivery.
 
-For a manual Redis queue smoke check, enqueue a known task ID and dequeue it:
+## Judge Demo
+
+1. Start infrastructure, API, and both workers using the commands above.
+2. Submit a `slow-demo` task and observe its `processing` task record and first
+   execution through `GET /tasks/<id>`.
+3. Kill the terminal running `demo-worker-a` while it owns the task.
+4. After the heartbeat timeout, use `GET /workers` to show it offline.
+5. The reaper records attempt one as `abandoned`, schedules a retry, and
+   `demo-worker-b` completes the later attempt.
+6. Submit `fail-demo` with `"max_attempts": 3`; show its retry scheduling and
+   eventual `dlq` status with `GET /tasks/<id>` and `GET /stats`.
+7. `POST /tasks/<id>/reprocess` to send that DLQ task back through the queue.
+
+For a manual ready-queue check:
 
 ```sh
 npm run queue:smoke -- enqueue <task-id>
 npm run queue:smoke -- dequeue
 ```
-
-Workers, retries, scheduling, DLQs, failover handling, and the dashboard are
-intentionally deferred to later phases.
-
-## Worker
-
-Start a worker in a second terminal after the infrastructure and migrations are
-running:
-
-```sh
-npm run worker
-```
-
-The worker has a unique process ID and blocks on the ready queue. For each
-queued task it loads the task from PostgreSQL, marks it `processing`, and runs
-an explicitly supported handler. The `demo` handler completes with a
-deterministic result derived from the task payload; the task is then marked
-`completed` with `completed_at` set. Unsupported task types are marked
-`failed` with the reason in `last_error`. The worker continues processing after
-failures and exits cleanly on `SIGINT` or `SIGTERM`.
