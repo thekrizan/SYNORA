@@ -3,11 +3,11 @@
 import { motion } from 'framer-motion'
 
 interface TopNavProps {
-  isDemoMode: boolean
-  onToggleDemo: () => void
+  apiUrl?: string
+  online?: number
 }
 
-export function TopNav({ isDemoMode, onToggleDemo }: TopNavProps) {
+export function TopNav({ apiUrl, online = 0 }: TopNavProps) {
   return (
     <motion.header
       initial={{ opacity: 0, y: -18, filter: 'blur(8px)' }}
@@ -30,35 +30,11 @@ export function TopNav({ isDemoMode, onToggleDemo }: TopNavProps) {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
           </span>
-          <span className="font-mono text-[0.65rem] font-medium uppercase tracking-[0.18em] text-emerald-300">
-            Live
+          <span className="font-mono text-[0.65rem] font-medium uppercase tracking-[0.12em] text-emerald-300">
+            {online} online
           </span>
         </div>
-
-        <div className="flex items-center gap-3">
-          <span className="hidden font-mono text-[0.65rem] uppercase tracking-[0.18em] text-neutral-400 sm:inline">
-            Demo Mode
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isDemoMode}
-            aria-label="Toggle demo simulation"
-            onClick={onToggleDemo}
-            className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors duration-300 ${
-              isDemoMode
-                ? 'border-fuchsia-400/40 bg-gradient-to-r from-indigo-500/60 to-fuchsia-500/70 shadow-[0_0_18px_rgba(236,72,153,0.5)]'
-                : 'border-white/15 bg-white/5'
-            }`}
-          >
-            <motion.span
-              layout
-              transition={{ type: 'spring', stiffness: 520, damping: 34 }}
-              className="absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-md"
-              style={{ left: isDemoMode ? 'calc(100% - 1.5rem)' : '0.25rem' }}
-            />
-          </button>
-        </div>
+        <span className="hidden font-mono text-[0.6rem] text-neutral-500 sm:inline">{apiUrl}</span>
       </div>
     </motion.header>
   )

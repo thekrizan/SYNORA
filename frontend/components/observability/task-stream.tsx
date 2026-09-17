@@ -11,15 +11,11 @@ interface TaskStreamProps {
 }
 
 const STATUS_STYLES: Record<TaskStatus, string> = {
-  QUEUED: 'border-white/15 bg-white/5 text-neutral-300',
-  RUNNING: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300',
-  COMPLETED: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300',
-  RETRYING: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
-  DEAD_LETTER: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
+  scheduled: 'border-violet-400/30 bg-violet-400/10 text-violet-300', queued: 'border-white/15 bg-white/5 text-neutral-300', processing: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300', completed: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300', failed: 'border-amber-400/30 bg-amber-400/10 text-amber-300', dlq: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
 }
 
 function StatusPill({ status }: { status: TaskStatus }) {
-  const isDead = status === 'DEAD_LETTER'
+  const isDead = status === 'dlq'
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[0.6rem] font-medium uppercase tracking-[0.12em] ${STATUS_STYLES[status]} ${
@@ -52,7 +48,7 @@ export function TaskStream({ tasks, onSelect, delay = 0 }: TaskStreamProps) {
       <div className="glass-scroll mt-1 max-h-72 min-h-0 flex-1 overflow-y-auto pr-1">
         <AnimatePresence initial={false}>
           {ordered.map((task) => {
-            const isDead = task.status === 'DEAD_LETTER'
+            const isDead = task.status === 'dlq'
             return (
               <motion.button
                 key={task.id}
@@ -71,10 +67,10 @@ export function TaskStream({ tasks, onSelect, delay = 0 }: TaskStreamProps) {
                   {task.id}
                 </span>
                 <span className="truncate font-mono text-xs text-neutral-400">
-                  {task.name}
+                  {task.type}
                 </span>
-                <span className={`font-mono text-[0.7rem] ${task.node === 'W-BETA' && isDead ? 'text-rose-400' : 'text-neutral-500'}`}>
-                  {task.node}
+                <span className={`font-mono text-[0.7rem] ${isDead ? 'text-rose-400' : 'text-neutral-500'}`}>
+                  {task.assigned_worker_id?.slice(0, 8) || '—'}
                 </span>
                 <span className="flex justify-end">
                   <StatusPill status={task.status} />

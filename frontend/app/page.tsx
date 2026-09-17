@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { EventFeed } from '@/components/observability/event-feed'
 import { QueueVelocity } from '@/components/observability/queue-velocity'
@@ -11,8 +11,6 @@ import { WorkerGrid } from '@/components/observability/worker-grid'
 
 export default function Page() {
   const {
-    isDemoMode,
-    toggleDemo,
     workers,
     tasks,
     events,
@@ -20,7 +18,13 @@ export default function Page() {
     selectedTask,
     selectTask,
     clearSelection,
+    stats, loading, error, createTask, reprocessTask, apiUrl,
   } = useDashboard()
+  const [type, setType] = useState('demo')
+  const [maxAttempts, setMaxAttempts] = useState('3')
+  const [scheduledFor, setScheduledFor] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitMessage, setSubmitMessage] = useState('')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -47,7 +51,21 @@ export default function Page() {
       />
 
       <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        <TopNav isDemoMode={isDemoMode} onToggleDemo={toggleDemo} />
+        <TopNav apiUrl={apiUrl} online={stats.workers_online} />
+
+        <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.035] p-4 backdrop-blur-2xl">
+          <form className="flex flex-wrap items-end gap-3" onSubmit={async (event) => { event.preventDefault(); setSubmitting(true); setSubmitMessage(''); try { await createTask({ type, payload: { source: 'dashboard' }, max_attempts: Number(maxAttempts), ...(scheduledFor ? { scheduled_for: new Date(scheduledFor).toISOString() } : {}) }); setSubmitMessage('Task submitted'); setScheduledFor('') } catch (cause) { setSubmitMessage(cause instanceof Error ? cause.message : 'Submit failed') } finally { setSubmitting(false) } }}>
+            <label className="font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500">Task type<select value={type} onChange={(event) => setType(event.target.value)} className="mt-1 block rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"><option>demo</option><option>slow-demo</option><option>fail-demo</option></select></label>
+            <label className="font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500">Max attempts<input value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)} type="number" min="1" max="20" className="mt-1 block w-24 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" /></label>
+            <label className="font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500">Schedule (optional)<input value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} type="datetime-local" className="mt-1 block rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white" /></label>
+            <button disabled={submitting} className="rounded-xl bg-cyan-400 px-4 py-2.5 font-mono text-xs font-semibold uppercase tracking-widest text-black disabled:opacity-50">{submitting ? 'Submitting…' : 'Submit task'}</button>
+            {submitMessage ? <span className="font-mono text-xs text-neutral-400">{submitMessage}</span> : null}
+          </form>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">{[['queued', stats.queued], ['processing', stats.processing], ['completed', stats.completed], ['failed', stats.failed], ['dlq', stats.dlq], ['scheduled', stats.scheduled], ['online', stats.workers_online], ['offline', stats.workers_offline]].map(([label, value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2"><div className="font-mono text-[0.58rem] uppercase tracking-widest text-neutral-500">{label}</div><div className="mt-1 font-mono text-xl text-white">{value}</div></div>)}</div>
+        {error ? <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 font-mono text-xs text-rose-300">{error} · retrying automatically</div> : null}
+        {loading && !tasks.length ? <div className="mt-4 font-mono text-xs text-neutral-500">Connecting to backend…</div> : null}
 
         <div className="mt-4 flex flex-col gap-4 lg:mt-6 lg:flex-row">
           <div className="flex flex-1 flex-col gap-4">
@@ -64,7 +82,7 @@ export default function Page() {
         </div>
       </div>
 
-      <TaskInspector task={selectedTask} onClose={clearSelection} />
+      <TaskInspector task={selectedTask} onClose={clearSelection} onReprocess={reprocessTask} />
     </main>
   )
 }

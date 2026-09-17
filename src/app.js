@@ -38,6 +38,14 @@ function validateCreateTask(body) {
 
 export const app = express();
 
+// Allow the local Next.js dashboard to read the API during the hackathon demo.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_ORIGIN || 'http://localhost:3001');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+});
 app.use(express.json());
 
 app.post('/tasks', async (req, res, next) => {
