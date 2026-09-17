@@ -5,6 +5,7 @@
   "description": "Distributed task scheduler and worker system",
   "type": "module",
   "scripts": {
+    "start": "node src/server.js",
     "migrate": "node src/db/migrate.js",
     "db:up": "docker compose up -d postgres redis",
     "db:down": "docker compose down"
@@ -14,7 +15,7 @@
   },
   "dependencies": {
     "dotenv": "^16.6.1",
+    "express": "^5.2.1",
     "pg": "^8.16.3"
   }
 }
-
