@@ -30,4 +30,20 @@ curl http://localhost:3000/tasks/<task-id>
 
 `type` and an object `payload` are required. `scheduled_for` accepts an ISO-8601 timestamp and `max_attempts` must be a positive integer.
 
-Queue processing, workers, and the dashboard are intentionally deferred to later phases.
+## Redis ready queue
+
+After PostgreSQL creates a task, the API enqueues its ID in the Redis list
+`synora:tasks:ready`. The queue is FIFO (`LPUSH` on create and blocking
+`BRPOP` on dequeue). If Redis is unavailable after the database insert, the
+API returns `503` and logs the enqueue error; the task remains in PostgreSQL
+but is not presented as successfully queued.
+
+For a manual Redis queue smoke check, enqueue a known task ID and dequeue it:
+
+```sh
+npm run queue:smoke -- enqueue <task-id>
+npm run queue:smoke -- dequeue
+```
+
+Workers, retries, scheduling, DLQs, failover handling, and the dashboard are
+intentionally deferred to later phases.

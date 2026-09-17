@@ -1,5 +1,6 @@
 import express from 'express';
 import { pool } from './db/pool.js';
+import { enqueueTaskId } from './queue/task-queue.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -52,6 +53,17 @@ app.post('/tasks', async (req, res, next) => {
        RETURNING *`,
       [req.body.type.trim(), req.body.payload, scheduledFor, maxAttempts],
     );
+
+    try {
+      await enqueueTaskId(rows[0].id);
+    } catch (error) {
+      console.error(`Failed to enqueue task ${rows[0].id}:`, error);
+      return res.status(503).json({
+        error: 'Task was created but could not be queued',
+        task_id: rows[0].id,
+      });
+    }
+
     return res.status(201).json({ task: rows[0] });
   } catch (error) {
     return next(error);
